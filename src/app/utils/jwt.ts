@@ -19,7 +19,7 @@ const verifyToken = (token: string, secret: string) => {
 			success: true,
 			data: verifiedToken,
 		};
-	// biome-ignore lint/suspicious/noExplicitAny: error is handled generically
+		// biome-ignore lint/suspicious/noExplicitAny: error is handled generically
 	} catch (error: any) {
 		console.log("Token verification failed:", error);
 		return {
