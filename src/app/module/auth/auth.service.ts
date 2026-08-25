@@ -220,7 +220,7 @@ const googleLogin = async (payload: IGoogleLogin) => {
 		throw new Error("Google Email Not Found");
 	}
 	if (!googleIdTokenPayload.name) {
-		throw new Error("Google Email User Name Not Found");
+		throw new Error("Google User Name Not Found");
 	}
 
 	const ifPatientExistWithGoogleAuth = await prisma.user.findUnique({
