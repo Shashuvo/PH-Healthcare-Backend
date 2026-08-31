@@ -31,3 +31,4 @@ export interface IResetPasswordPayload {
 	newPassword : string;
 	otp : string;
 }
+
