@@ -6,6 +6,7 @@ import {
 	Role,
 	UserStatus,
 } from "../../../generated/prisma/enums";
+import ejs from "ejs";
 import config from "../../config";
 import { prisma } from "../../lib/prisma";
 import { jwtUtils } from "../../utils/jwt";
@@ -20,6 +21,9 @@ import type {
 import { googleClient } from "../../lib/googleAuth";
 import type { TokenPayload } from "google-auth-library";
 import { redisClient } from "../../lib/redis";
+import path from "path";
+import { transporter } from "../../lib/nodemailer";
+
 
 const registerPatient = async (payload: IRegisterPatientPayload) => {
 	const { name, password } = payload;
@@ -370,6 +374,27 @@ const forgotPassword = async (payload: IForgotPasswordPayload) => {
 			value : expirationSeconds
 		}
 	})
+
+	const templatePath = path.join(process.cwd(), "src/app/templates/forgot-password.ejs")
+
+	const templateData = {
+		name: isUserExist.name,
+		otp,
+		expirationMinutes: expirationSeconds / 60
+
+	}
+
+	const html = await ejs.renderFile(templatePath, templateData)
+
+	await transporter.sendMail({
+		from : config.email_sender,
+		to : isUserExist.email,
+		subject : "Forgot Password",
+		// text : `Your OTP is ${otp}`
+		// html: `<h1>Your OTP is ${otp}</h1>`
+		html
+	})
+
 }
 
 const resetPassword = async (payload : IResetPasswordPayload) => {
@@ -401,7 +426,7 @@ const resetPassword = async (payload : IResetPasswordPayload) => {
 		throw new Error("User Has Account With Google")
 	}
 
-	const key = `forgor-password-otp:${isUserExist.email}`
+	const key = `forgot-password-otp:${isUserExist.email}`
 
 	const redisOtp = await redisClient.get(key)
 
@@ -425,6 +450,25 @@ const resetPassword = async (payload : IResetPasswordPayload) => {
 	});
 
 	await redisClient.del([key]);
+
+	const templatePath = path.join(process.cwd(), "src/app/templates/reset-password-success.ejs")
+
+	const templateData = {
+		name: isUserExist.name
+	}
+
+	const html = await ejs.renderFile(templatePath, templateData )
+
+
+	await transporter.sendMail({
+		from: config.email_sender,
+		to: isUserExist.email,
+		subject: "Password Changed",
+		// text : `Your OTP is ${otp}`
+		// html: `<h1>Your Password Is Changed</h1>`
+		html
+	})
+
 }
 
 export const AuthService = {
