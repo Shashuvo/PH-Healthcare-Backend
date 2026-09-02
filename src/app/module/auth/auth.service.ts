@@ -83,14 +83,14 @@ const registerPatient = async (payload: IRegisterPatientPayload) => {
 
 	const html = await ejs.renderFile(templatePath, templateData)
 
-	// await transporter.sendMail({
-	// 	from: config.email_sender,
-	// 	to: email,
-	// 	subject: "Email Verification",
-	// 	// text : `Your OTP is ${otp}`
-	// 	// html: `<h1>Your OTP is ${otp}</h1>`
-	// 	html
-	// })
+	await transporter.sendMail({
+		from: config.email_sender,
+		to: email,
+		subject: "Email Verification",
+		// text : `Your OTP is ${otp}`
+		// html: `<h1>Your OTP is ${otp}</h1>`
+		html
+	})
 
 };
 
