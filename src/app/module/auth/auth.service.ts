@@ -109,7 +109,7 @@ const verifyPatientEmail = async (payload : IVerifyEmailPayload) => {
 	}
 
 	if (isUserExist?.emailVerified) {
-		throw new Error("Email ALready Verified")
+		throw new Error("Email Already Verified")
 	}
 
 	if (isUserExist?.isDeleted || isUserExist?.status === "DELETED") {
@@ -417,6 +417,23 @@ const googleLogin = async (payload: IGoogleLogin) => {
 					},
 				},
 			});
+
+			const templatePath = path.join(process.cwd(), "src/app/templates/patient-welcome-email.ejs")
+
+			const templateData = {
+				name: user.name,
+			}
+
+			const html = await ejs.renderFile(templatePath, templateData)
+
+			await transporter.sendMail({
+				from: config.email_sender,
+				to: user.email,
+				subject: "Welcome To PH Healthcare System",
+				// text : `Your OTP is ${otp}`
+				// html: `<h1>Your OTP is ${otp}</h1>`
+				html
+			})
 		}
 	}
 
