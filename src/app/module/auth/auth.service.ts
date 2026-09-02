@@ -26,7 +26,7 @@ import { transporter } from "../../lib/nodemailer";
 
 
 const registerPatient = async (payload: IRegisterPatientPayload) => {
-	const { name, password } = payload;
+	const { name, password, patient : patientData } = payload;
 	const email = payload.email.trim().toLowerCase();
 
 	const isUserExists = await prisma.user.findUnique({
@@ -39,48 +39,59 @@ const registerPatient = async (payload: IRegisterPatientPayload) => {
 
 	const hashedPassword = await bcrypt.hash(password, 8);
 
-	const createdUser = await prisma.user.create({
-		data: {
-			name,
-			email,
-			password: hashedPassword,
-			role: Role.PATIENT,
-			status: UserStatus.ACTIVE,
-			emailVerified: false,
-			patient: {
-				create: { name, email },
-			},
-		},
-		omit: { password: true },
-		include: { patient: true },
-	});
+	const expirationSeconds = 5 * 60
 
-	const { patient, ...user } = createdUser;
-	const jwtPayload = {
-		userId: user.id,
-		name: user.name,
-		email: user.email,
-		role: user.role,
-	};
+	const otpKey = `patient-registration-otp:${email}`
+	const otpValue = crypto.randomInt(100000, 1000000).toString();
 
-	const accessToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_access_secret,
-		config.jwt_access_expires_in as SignOptions,
-	);
+	await redisClient.set(otpKey, otpValue, {
+		expiration: {
+			type: "EX",
+			value: expirationSeconds
+		}
+	})
 
-	const refreshToken = jwtUtils.createToken(
-		jwtPayload,
-		config.jwt_refresh_secret,
-		config.jwt_refresh_expires_in as SignOptions,
-	);
+	const patientRegistrationKey = `patient-registration-data:${email}`
+	const redisUserDataPayload = {
+		name,
+		email,
+		password: hashedPassword,
+		patient: patientData
+	}
 
-	return {
-		user,
-		patient,
-		accessToken,
-		refreshToken,
-	};
+	await redisClient.set(
+		patientRegistrationKey, 
+		JSON.stringify(redisUserDataPayload), 
+		{
+			expiration: {
+				type: "EX",
+				value: expirationSeconds
+			}
+		}
+	)
+
+
+	const templatePath = path.join(process.cwd(), "src/app/templates/registration-user-otp.ejs")
+
+	const templateData = {
+		name,
+		email,
+		otp : otpValue,
+		expirationMinutes: expirationSeconds / 60
+
+	}
+
+	const html = await ejs.renderFile(templatePath, templateData)
+
+	// await transporter.sendMail({
+	// 	from: config.email_sender,
+	// 	to: email,
+	// 	subject: "Email Verification",
+	// 	// text : `Your OTP is ${otp}`
+	// 	// html: `<h1>Your OTP is ${otp}</h1>`
+	// 	html
+	// })
+
 };
 
 const loginUser = async (payload: ILoginUserPayload) => {
