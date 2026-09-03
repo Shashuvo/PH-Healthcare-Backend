@@ -430,8 +430,6 @@ const googleLogin = async (payload: IGoogleLogin) => {
 				from: config.email_sender,
 				to: user.email,
 				subject: "Welcome To PH Healthcare System",
-				// text : `Your OTP is ${otp}`
-				// html: `<h1>Your OTP is ${otp}</h1>`
 				html
 			})
 		}
