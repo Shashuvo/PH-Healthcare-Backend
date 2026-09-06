@@ -29,6 +29,7 @@
         "google-auth-library": "^11.0.2",
         "http-status": "^2.1.0",
         "jsonwebtoken": "^9.0.3",
+        "multer": "^2.3.0",
         "nodemailer": "^9.1.0",
         "pg": "^8.22.0",
         "redis": "^6.2.1",
