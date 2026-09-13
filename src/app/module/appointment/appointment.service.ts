@@ -29,7 +29,7 @@ const bookAppointment = async () => {
             amount: "1200",
             currency: "BDT",
             intent: "sale",
-            merchantInvoiceNumber: "Inv4" // apppointment id
+            merchantInvoiceNumber: "Inv1120101123" // apppointment id
         })
     });
 
