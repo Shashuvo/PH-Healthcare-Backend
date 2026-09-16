@@ -7,6 +7,7 @@ const router = Router();
 
 
 router.post("/book-appointment", auth(Role.PATIENT), AppointmentController.bookAppointment)
+router.post("/pay-appointment", auth(Role.PATIENT), AppointmentController.payAppointment);
 
 //book appointment callback url
 router.get("/book-appointment/payment/callback", AppointmentController.bookAppointmentCallback )
