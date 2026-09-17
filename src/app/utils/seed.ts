@@ -136,15 +136,25 @@ export const seedTesterDoctor = async () => {
         const hashedPassword = await bcrypt.hash(password, Number(config.bcrypt_salt_rounds))
 
         const testerDoctor = await prisma.user.create({
-            data: {
-                name,
-                email,
-                password: hashedPassword,
-                role: Role.DOCTOR,
-                needPasswordChange: false,
-                emailVerified: true
-            }
-        })
+			data: {
+				name,
+				email,
+				password: hashedPassword,
+				role: Role.DOCTOR,
+				needPasswordChange: false,
+				emailVerified: true,
+				doctor: {
+					create: {
+						email,
+						name,
+						experienceYears: 5,
+						licenseNumber: "BMDC0000",
+						qualifications: "MBBS",
+						specialization: "Neurology",
+					},
+				},
+			},
+		});
 
         console.log("Tester Doctor Created : ",testerDoctor);
 
