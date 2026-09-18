@@ -4,9 +4,10 @@ import { Role } from "../../../generated/prisma/enums";
 import config from "../../config";
 import { cloudinary } from "../../lib/cloudinary";
 import { prisma } from "../../lib/prisma";
+import { IApplyAsDoctorPayload } from "./doctor.interface";
 
 const applyAsDoctor = async (
-	payload: any,
+	payload: IApplyAsDoctorPayload,
 	resume: Express.Multer.File | null,
 	additionalFiles: Express.Multer.File[],
 ) => {
