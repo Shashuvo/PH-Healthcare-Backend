@@ -216,7 +216,7 @@ const approveDoctor = async (payload : IApproveDoctorPayload, reviewer : Request
 
 	const isApproved = verificationStatus === DoctorVerificationStatus.APPROVED;
 
-	const tempatePath = path.join(
+	const templatePath = path.join(
 		process.cwd(),
 		`src/app/templates/${isApproved
 			? "doctor-application-approved.ejs"
@@ -230,7 +230,7 @@ const approveDoctor = async (payload : IApproveDoctorPayload, reviewer : Request
 	};
 
 
-	const html = await ejs.renderFile(tempatePath, templateData);
+	const html = await ejs.renderFile(templatePath, templateData);
 
 	await transporter.sendMail({
 		from: config.email_sender,
