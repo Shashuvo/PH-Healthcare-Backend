@@ -14,3 +14,8 @@ export interface IApplyAsDoctorPayload {
         contactNumber?: string;
     };
 }
+
+export interface IVerifyDoctorEmailPayload {
+    email: string;
+    otp: string;
+}
