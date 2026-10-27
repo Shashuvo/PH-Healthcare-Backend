@@ -1,6 +1,8 @@
 import type { UploadApiResponse } from "cloudinary";
 import { cloudinary } from "../../lib/cloudinary";
 import { prisma } from "../../lib/prisma";
+import { AppError } from "../../utils/AppError";
+import httpStatus from "http-status";
 
 const uploadProfileImage = async (buffer : Buffer, userId : string) =>{
     // const cloudinaryResult = cloudinary.uploader.upload_stream(
@@ -11,7 +13,7 @@ const uploadProfileImage = async (buffer : Buffer, userId : string) =>{
     //     async (error, result) => {
     //         if(error){
     //             console.log(error);
-    //             throw new Error(error.message)
+    //             throw new AppError(httpStatus.BAD_REQUEST, error.message)
     //         }
 
     //         console.log(result, "result");

@@ -27,7 +27,7 @@ const applyAsDoctor = async (
 	});
 
 	if (isUserExists) {
-		throw new Error("User Already Exists With This Email");
+		throw new AppError(httpStatus.BAD_REQUEST, "User Already Exists With This Email");
 	}
 
 	const resumeUploadResult = await new Promise<UploadApiResponse>(

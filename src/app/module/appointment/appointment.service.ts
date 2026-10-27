@@ -3,6 +3,8 @@ import config from "../../config";
 import { getBkashIdToken } from "../../lib/bkash";
 import { prisma } from "../../lib/prisma";
 import type { RequestUser } from "../../middleware/checkAuth";
+import { AppError } from "../../utils/AppError";
+import httpStatus from "http-status";
 
 const bookAppointment = async (payload: any, user: RequestUser) => {
 	const transactionResult = await prisma.$transaction(async (tx) => {
@@ -77,11 +79,11 @@ const payAppointment = async (payload: any, user: RequestUser) => {
 	});
 
 	if (!existingAppointment) {
-		throw new Error("Appointment Does Not Exists");
+		throw new AppError(httpStatus.NOT_FOUND, "Appointment Does Not Exists");
 	}
 
 	if (existingAppointment.status !== "PENDING") {
-		throw new Error("Appointment Is Not Pending!");
+		throw new AppError(httpStatus.BAD_REQUEST, "Appointment Is Not Pending!");
 	}
 
 	// if (existingAppointment.status === "CANCELLED" || existingAppointment.status === "ONGOING" || existingAppointment.status === "COMPLETED"){
@@ -91,9 +93,9 @@ const payAppointment = async (payload: any, user: RequestUser) => {
 
 	const bkashIdToken = await getBkashIdToken();
 
-	if (!bkashIdToken) {
-		throw new Error("No Bkash Access Token Found!");
-	}
+		if (!bkashIdToken) {
+			throw new AppError(httpStatus.BAD_GATEWAY, "No Bkash Access Token Found!");
+		}
 
 	const bkashCreatePaymentResponse = await fetch(
 		`${config.bkash_base_url}/tokenized/checkout/create`,
@@ -143,19 +145,19 @@ const bookAppointmentCallback = async (query: Record<string, any>) => {
 		const paymentId = query.paymentID;
 
 		if (!paymentId) {
-			throw new Error("Payment Id Missing");
+			throw new AppError(httpStatus.BAD_REQUEST, "Payment Id Missing");
 		}
 
 		const status = query.status;
 
 		if (!status) {
-			throw new Error("Payment Status is Missing");
+			throw new AppError(httpStatus.BAD_REQUEST, "Payment Status is Missing");
 		}
 
 		const bkashIdToken = await getBkashIdToken();
 
 		if (!bkashIdToken) {
-			throw new Error("No Bkash Access Token Found!");
+			throw new AppError(httpStatus.BAD_GATEWAY, "No Bkash Access Token Found!");
 		}
 
 		const executedPaymentResponse = await fetch(
@@ -255,18 +257,18 @@ const cancelAppointment = async (payload: any) => {
 		});
 
 		if (!existingAppointment) {
-			throw new Error("Appointment Does Not Exists");
+			throw new AppError(httpStatus.NOT_FOUND, "Appointment Does Not Exists");
 		}
 
 		if (
 			existingAppointment.status === "ONGOING" ||
 			existingAppointment.status === "COMPLETED"
 		) {
-			throw new Error("Appointment Ongoing or Completed");
+			throw new AppError(httpStatus.BAD_REQUEST, "Appointment Ongoing or Completed");
 		}
 
 		if (existingAppointment.status === "CANCELLED") {
-			throw new Error("Appointment Already Cancelled");
+			throw new AppError(httpStatus.BAD_REQUEST, "Appointment Already Cancelled");
 		}
 
 		const updatedAppointment = await tx.appointment.update({
