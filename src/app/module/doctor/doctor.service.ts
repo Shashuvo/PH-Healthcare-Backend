@@ -1,19 +1,21 @@
 import bcrypt from "bcryptjs";
 import type { UploadApiResponse } from "cloudinary";
-import { DoctorVerificationStatus, Role } from "../../../generated/prisma/enums";
-import config from "../../config";
-import { cloudinary } from "../../lib/cloudinary";
-import { prisma } from "../../lib/prisma";
-import { IApplyAsDoctorPayload, IApproveDoctorPayload, IVerifyDoctorEmailPayload } from "./doctor.interface";
-import { redisClient } from "../../lib/redis";
-import { AppError } from "../../utils/AppError";
-import httpStatus from "http-status";
-import { transporter } from "../../lib/nodemailer";
+import crypto from "crypto";
+import { addDays, startOfDay } from "date-fns";
 import ejs from "ejs";
-import { RequestUser } from "../../middleware/checkAuth";
+import httpStatus from "http-status";
 import path from "path";
+import { DoctorVerificationStatus, Role, ScheduleStatus } from "../../../generated/prisma/enums";
 import { DoctorWhereInput } from "../../../generated/prisma/models";
+import config from "../../config";
 import { IQuery } from "../../interfaces";
+import { cloudinary } from "../../lib/cloudinary";
+import { transporter } from "../../lib/nodemailer";
+import { prisma } from "../../lib/prisma";
+import { redisClient } from "../../lib/redis";
+import { RequestUser } from "../../middleware/checkAuth";
+import { AppError } from "../../utils/AppError";
+import { IApplyAsDoctorPayload, IApproveDoctorPayload, IUpdateDoctorProfilePayload, IVerifyDoctorEmailPayload } from "./doctor.interface";
 
 const applyAsDoctor = async (
 	payload: IApplyAsDoctorPayload,
@@ -27,7 +29,7 @@ const applyAsDoctor = async (
 	});
 
 	if (isUserExists) {
-		throw new AppError(httpStatus.BAD_REQUEST, "User Already Exists With This Email");
+		throw new AppError(httpStatus.CONFLICT, "User Already Exists With This Email");
 	}
 
 	const resumeUploadResult = await new Promise<UploadApiResponse>(
@@ -44,7 +46,12 @@ const applyAsDoctor = async (
 						}
 
 						if (!result) {
-							return reject(new Error("No result returned from Cloudinary"));
+							return reject(
+								new AppError(
+									httpStatus.INTERNAL_SERVER_ERROR,
+									"No result returned from Cloudinary",
+								),
+							);
 						}
 
 						resolve(result);
@@ -53,6 +60,8 @@ const applyAsDoctor = async (
 				.end(resume?.buffer);
 		},
 	);
+
+	console.log({ resumeUploadResult });
 
 	const additionalFilesUploadResults = await Promise.all(
 		additionalFiles.map((file) => {
@@ -79,6 +88,8 @@ const applyAsDoctor = async (
 			});
 		}),
 	);
+
+	console.log({ additionalFilesUploadResults });
 
 	const randomDoctorPassword = Math.random().toString(36).slice(-8);
 
@@ -111,6 +122,40 @@ const applyAsDoctor = async (
 		include: {
 			doctor: true,
 		},
+	});
+
+
+	const expirationSeconds = 60 * 60 
+
+	const otpKey = `doctor-application-otp:${payload.user.email}`
+	const otpValue = crypto.randomInt(100000, 1000000).toString();
+
+	await redisClient.set(otpKey, otpValue, {
+		expiration: {
+			type: "EX",
+			value: expirationSeconds,
+		},
+	});
+
+	const tempatePath = path.join(
+		process.cwd(),
+		"src/app/templates/registration-user-otp.ejs",
+	);
+
+	const templateData = {
+		name: payload.user.name,
+		email : payload.user.email,
+		otp: otpValue,
+		expirationMinutes: expirationSeconds / 60,
+	};
+
+	const html = await ejs.renderFile(tempatePath, templateData);
+
+	await transporter.sendMail({
+		from: config.email_sender,
+		to: payload.user.email,
+		subject: "Doctor Application - Email Verification",
+		html,
 	});
 
 	return doctorApplication;
@@ -161,7 +206,7 @@ const verifyDoctorEmail = async (payload : IVerifyDoctorEmailPayload) => {
 
 	return verifiedUser
 
-};
+}
 
 const approveDoctor = async (payload : IApproveDoctorPayload, reviewer : RequestUser) => {
 	const { doctorId, verificationStatus, rejectionReason } = payload;
@@ -218,7 +263,7 @@ const approveDoctor = async (payload : IApproveDoctorPayload, reviewer : Request
 
 	const isApproved = verificationStatus === DoctorVerificationStatus.APPROVED;
 
-	const templatePath = path.join(
+	const tempatePath = path.join(
 		process.cwd(),
 		`src/app/templates/${isApproved
 			? "doctor-application-approved.ejs"
@@ -232,7 +277,7 @@ const approveDoctor = async (payload : IApproveDoctorPayload, reviewer : Request
 	};
 
 
-	const html = await ejs.renderFile(templatePath, templateData);
+	const html = await ejs.renderFile(tempatePath, templateData);
 
 	await transporter.sendMail({
 		from: config.email_sender,
@@ -244,7 +289,10 @@ const approveDoctor = async (payload : IApproveDoctorPayload, reviewer : Request
 	});
 
 	return updatedDoctor
-};
+
+
+
+}
 
 const getAllDoctors = async (query: IQuery) => {
 
@@ -348,7 +396,235 @@ const getAllDoctors = async (query: IQuery) => {
 			totalPages: Math.ceil(totalDoctorCount / limit)
 		}
 	}
-};
+}
+
+const updateDoctorProfile = async (payload : IUpdateDoctorProfilePayload, user : RequestUser) => {
+	const existingDoctor = await prisma.doctor.findUnique({
+		where: { userId: user.userId },
+	});
+
+	if (!existingDoctor) {
+		throw new AppError(httpStatus.NOT_FOUND, "Doctor Profile Not Found");
+	}
+
+	const updatedDoctor = await prisma.doctor.update({
+		where: { id: existingDoctor.id },
+		data: payload,
+	});
+
+	return updatedDoctor;
+
+}
+
+// Fields safe to expose on the public (unauthenticated) doctor-discovery endpoints.
+// Deliberately excludes resume/additionalFiles, verification review metadata, and
+// anything relation/auth related (user, userId, isDeleted, deletedAt...).
+
+
+const getAvailableDoctorByTodaysSchedule = async (query: IQuery) => {
+
+	const limit = query.limit ? Number(query.limit) : 10;
+	const page = query.page ? Number(query.page) : 1;
+	const skip = (page - 1) * limit;
+	const sortBy = query.sortBy ? query.sortBy : "createdAt";
+	const sortOrder = query.sortOrder ? query.sortOrder : "desc"
+
+	const now = new Date();
+	const startOfToday = startOfDay(now);
+	const startOfTomorrow = addDays(startOfToday, 1);
+
+	// A doctor is "available today" if they have at least one published,
+	// not-yet-started schedule today with open slots left.
+
+	const andConditions: DoctorWhereInput[] = [
+		{ isDeleted: false },
+		{ verificationStatus: DoctorVerificationStatus.APPROVED },
+		{
+			schedules: {
+				some: {
+					isDeleted: false,
+					status: ScheduleStatus.PUBLISHED,
+					availableSlots: { gt: 0 },
+					startDateTime: {
+						gte: startOfToday,
+						lt: startOfTomorrow,
+						gt: now,
+					},
+				} } },
+	];
+
+	if (query.searchTerm) {
+		andConditions.push({
+			OR: [
+				{ name: { contains: query.searchTerm, mode: "insensitive" } },
+				{ specialization: { contains: query.searchTerm, mode: "insensitive" } },
+			],
+		});
+	}
+
+	if (query.specialization) {
+		andConditions.push({
+			specialization: { equals: query.specialization, mode: "insensitive" },
+		});
+	}
+
+	const availableDoctors = await prisma.doctor.findMany({
+		where: {
+			AND: andConditions,
+		},
+
+		take: limit,
+		skip,
+
+		orderBy: {
+			[sortBy]: sortOrder,
+		},
+
+		select: {
+			id: true,
+			name: true,
+			specialization: true,
+			licenseNumber: true,
+			qualifications: true,
+			experienceYears: true,
+			bio: true,
+			consultationFee: true,
+			createdAt: true,
+			schedules: {
+				where: {
+					isDeleted: false,
+					status: ScheduleStatus.PUBLISHED,
+					availableSlots: { gt: 0 },
+					startDateTime: {
+						gte: startOfToday,
+						lt: startOfTomorrow,
+						gt: now,
+					},
+				},
+				orderBy: { [sortBy] : sortOrder },
+				select: {
+					id: true,
+					startDateTime: true,
+					endDateTime: true,
+					availableSlots: true,
+					totalSlots: true,
+				},
+			},
+		},
+	});
+
+	const totalAvailableDoctorCount = await prisma.doctor.count({
+		where: { AND: andConditions },
+	});
+
+	return {
+		data: availableDoctors,
+		meta: {
+			page,
+			limit,
+			total: totalAvailableDoctorCount,
+			totalPages: Math.ceil(totalAvailableDoctorCount / limit),
+		},
+	};
+}
+
+const getAllDoctorsListPublic = async (query: IQuery) => {
+
+	const limit = query.limit ? Number(query.limit) : 10;
+	const page = query.page ? Number(query.page) : 1;
+	const skip = (page - 1) * limit;
+	const sortBy = query.sortBy ? query.sortBy : "createdAt";
+	const sortOrder = query.sortOrder ? query.sortOrder : "desc"
+
+	const andConditions: DoctorWhereInput[] = [
+		{ isDeleted: false },
+		{ verificationStatus: DoctorVerificationStatus.APPROVED },
+	];
+
+	if (query.searchTerm) {
+		andConditions.push({
+			OR: [
+				{ name: { contains: query.searchTerm, mode: "insensitive" } },
+				{ specialization: { contains: query.searchTerm, mode: "insensitive" } },
+				{ qualifications: { contains: query.searchTerm, mode: "insensitive" } },
+			],
+		});
+	}
+
+	if (query.specialization) {
+		andConditions.push({
+			specialization: { equals: query.specialization, mode: "insensitive" },
+		});
+	}
+
+	const allDoctors = await prisma.doctor.findMany({
+		where: {
+			AND: andConditions,
+		},
+
+		take: limit,
+		skip,
+
+		orderBy: {
+			[sortBy]: sortOrder,
+		},
+
+		select: {
+			id: true,
+			name: true,
+			specialization: true,
+			licenseNumber: true,
+			qualifications: true,
+			experienceYears: true,
+			bio: true,
+			consultationFee: true,
+			createdAt: true,
+		},
+	});
+
+	const totalDoctorCount = await prisma.doctor.count({
+		where: { AND: andConditions },
+	});
+
+	return {
+		data: allDoctors,
+		meta: {
+			page,
+			limit,
+			total: totalDoctorCount,
+			totalPages: Math.ceil(totalDoctorCount / limit),
+		},
+	};
+}
+
+const getSingleDoctorPublicProfile = async (doctorId: string) => {
+
+	const doctor = await prisma.doctor.findUnique({
+		where: {
+			id: doctorId,
+			isDeleted: false,
+			verificationStatus: DoctorVerificationStatus.APPROVED,
+		},
+		select: {
+			id: true,
+			name: true,
+			specialization: true,
+			licenseNumber: true,
+			qualifications: true,
+			experienceYears: true,
+			bio: true,
+			consultationFee: true,
+			createdAt: true,
+		},
+	});
+
+	if (!doctor) {
+		throw new AppError(httpStatus.NOT_FOUND, "Doctor Not Found");
+	}
+
+	return doctor;
+}
+
 
 
 export const DoctorServices = {
@@ -356,4 +632,8 @@ export const DoctorServices = {
 	verifyDoctorEmail,
 	approveDoctor,
 	getAllDoctors,
+	updateDoctorProfile,
+	getAvailableDoctorByTodaysSchedule,
+	getAllDoctorsListPublic,
+	getSingleDoctorPublicProfile
 };
