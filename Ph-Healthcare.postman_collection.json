@@ -19,7 +19,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"Samin Ravi\",\n    \"email\": \"mentor.saminravi@gmail.com\",\n    \"password\": \"aA@@@12345678\",\n    \"patient\": {\n        \"contactNumber\": \"+8801700000000\"\n    }\n}",
+              "raw": "{\n    \"name\": \"Shahariat Hossen\",\n    \"email\": \"Shahariat@gmail.com\",\n    \"password\": \"aA@@@12345678\",\n    \"patient\": {\n        \"contactNumber\": \"+8801700000000\"\n    }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -68,7 +68,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"mentor.saminravi@gmail.com\",\n    \"otp\": \"565173\"\n}",
+              "raw": "{\n    \"email\": \"shahariat@gmail.com\",\n    \"otp\": \"565173\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
