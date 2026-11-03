@@ -17,6 +17,7 @@ import { AppointmentRoutes } from "./app/module/appointment/appointment.route";
 import { DoctorRoutes } from "./app/module/doctor/doctor.route";
 import { PaymentRoutes } from "./app/module/payment/payment.route";
 import { ScheduleRoutes } from "./app/module/schedule/schedule.router";
+import { PrescriptionRoutes } from "./app/module/prescription/prescription.route";
 
 const app: Application = express();
 
@@ -40,6 +41,7 @@ app.use("/api/v1/appointment", AppointmentRoutes);
 app.use("/api/v1/doctor", DoctorRoutes);
 app.use("/api/v1/schedule", ScheduleRoutes);
 app.use("/api/v1/payment", PaymentRoutes);
+app.use("/api/v1/prescription", PrescriptionRoutes);
 
 // Basic route
 app.get("/", async (req: Request, res: Response) => {
